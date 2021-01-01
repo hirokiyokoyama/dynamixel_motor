@@ -45,12 +45,12 @@ __email__ = 'anton@email.arizona.edu'
 import sys
 from optparse import OptionParser
 
-import roslib
-roslib.load_manifest('dynamixel_driver')
+#import roslib
+#roslib.load_manifest('dynamixel_driver')
 
 from dynamixel_driver import dynamixel_io
 
-if __name__ == '__main__':
+def main(args=sys.argv):
     usage_msg = 'Usage: %prog [options] MOTOR_IDs'
     desc_msg = 'Sets various configuration options of specified Dynamixel servo motor.'
     epi_msg = 'Example: %s --port=/dev/ttyUSB1 --baud=57600 --baud-rate=1 --return-delay=1 5 9 23' % sys.argv[0]
@@ -73,7 +73,7 @@ if __name__ == '__main__':
     parser.add_option('--max-voltage-limit', type='int', metavar='MAX_VOLTAGE', dest='max_voltage_limit',
                       help='set servo motor maximum voltage limit')
                       
-    (options, args) = parser.parse_args(sys.argv)
+    (options, args) = parser.parse_args(args)
     print options
     
     if len(args) < 2:
@@ -142,3 +142,7 @@ if __name__ == '__main__':
                 print 'done'
             else:
                 print 'Unable to connect to Dynamixel motor with ID %d' % motor_id
+
+if __name__ == '__main__':
+    main()
+

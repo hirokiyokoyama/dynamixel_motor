@@ -45,19 +45,19 @@ __email__ = 'anton@email.arizona.edu'
 import sys
 from optparse import OptionParser
 
-import roslib
-roslib.load_manifest('dynamixel_driver')
+#import roslib
+#roslib.load_manifest('dynamixel_driver')
 
 from dynamixel_driver import dynamixel_io
 
-if __name__ == '__main__':
+def main(args=sys.argv):
     parser = OptionParser(usage='Usage: %prog [options] OLD_ID NEW_ID', description='Changes the unique ID of a Dynamixel servo motor.')
     parser.add_option('-p', '--port', metavar='PORT', default='/dev/ttyUSB0',
                       help='motors of specified controllers are connected to PORT [default: %default]')
     parser.add_option('-b', '--baud', metavar='BAUD', type="int", default=1000000,
                       help='connection to serial port will be established at BAUD bps [default: %default]')
                       
-    (options, args) = parser.parse_args(sys.argv)
+    (options, args) = parser.parse_args(args)
     
     if len(args) < 3:
         parser.print_help()
@@ -84,3 +84,6 @@ if __name__ == '__main__':
                 print 'ERROR: The motor did not respond to a ping to its new id.'
         else:
             print 'ERROR: The specified motor did not respond to id %d. Make sure to specify the correct baudrate.' % old_id
+
+if __name__ == '__main__':
+    main()

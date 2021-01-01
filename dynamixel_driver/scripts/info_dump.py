@@ -45,8 +45,8 @@ __email__ = 'anton@email.arizona.edu'
 import sys
 from optparse import OptionParser
 
-import roslib
-roslib.load_manifest('dynamixel_driver')
+#import roslib
+#roslib.load_manifest('dynamixel_driver')
 
 from dynamixel_driver import dynamixel_io
 from dynamixel_driver.dynamixel_const import *
@@ -80,7 +80,7 @@ def print_data(values):
         Moving ------------------ %(moving)s
 ''' %values
 
-if __name__ == '__main__':
+def main(args=sys.argv):
     usage_msg = 'Usage: %prog [options] IDs'
     desc_msg = 'Prints the current status of specified Dynamixel servo motors.'
     epi_msg = 'Example: %s --port=/dev/ttyUSB1 --baud=57600 1 2 3 4 5' % sys.argv[0]
@@ -91,7 +91,7 @@ if __name__ == '__main__':
     parser.add_option('-b', '--baud', metavar='BAUD', type="int", default=1000000,
                       help='connection to serial port will be established at BAUD bps [default: %default]')
                       
-    (options, args) = parser.parse_args(sys.argv)
+    (options, args) = parser.parse_args(args)
     
     if len(args) < 2:
         parser.print_help()
@@ -134,4 +134,7 @@ if __name__ == '__main__':
                 print 'error'
         if responses == 0:
             print 'ERROR: None of the specified motors responded. Make sure to specify the correct baudrate.'
+
+if __name__ == '__main__':
+    main()
 

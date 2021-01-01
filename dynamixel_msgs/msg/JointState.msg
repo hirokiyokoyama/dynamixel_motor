@@ -1,4 +1,4 @@
-Header header
+std_msgs/Header header
 string name         # joint name
 int32[] motor_ids   # motor ids controlling this joint
 int32[] motor_temps # motor temperatures, same order as motor_ids

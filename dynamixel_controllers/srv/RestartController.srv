@@ -4,6 +4,7 @@ string module_name          # name of the controller module within that package
 string class_name           # controller class name within that module
 string controller_name      # path to controller config parameters on param server
 string[] dependencies       # optional, list names of all controllers this controller depends on
+rcl_interfaces/Parameter[] parameters
 ---
 bool success
 string reason

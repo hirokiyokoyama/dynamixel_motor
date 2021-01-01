@@ -1,4 +1,4 @@
-<package>
+<package format="3">
   <name>dynamixel_driver</name>
   <version>0.4.1</version>
   <description>
@@ -20,13 +20,11 @@
   <author>Antons Rebguns</author>
   <author>Cody Jorgensen</author>
 
-  <buildtool_depend>catkin</buildtool_depend>
-
-  <run_depend>rospy</run_depend>
-  <run_depend>diagnostic_msgs</run_depend>
-  <run_depend>python-serial</run_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>diagnostic_msgs</exec_depend>
+  <exec_depend>python-serial</exec_depend>
 
   <export>
-
+    <build_type>ament_python</build_type>
   </export>
 </package>

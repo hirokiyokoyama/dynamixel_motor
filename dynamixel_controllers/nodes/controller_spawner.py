@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
 # Software License Agreement (BSD License)
@@ -42,11 +42,11 @@ __maintainer__ = 'Antons Rebguns'
 __email__ = 'anton@email.arizona.edu'
 
 
-import sys
 import os
 from optparse import OptionParser
 
-import rospy
+import rclpy
+from rclpy.node import Node
 
 from dynamixel_controllers.srv import StartController
 from dynamixel_controllers.srv import StopController
@@ -55,47 +55,76 @@ from dynamixel_controllers.srv import RestartController
 
 parser = OptionParser()
 
-def manage_controller(controller_name, port_namespace, controller_type, command, deps, start, stop, restart):
+def manage_controller(node, controller_name, port_namespace, controller_type, command, deps, start, stop, restart, set_parameters):
     try:
-        controller = rospy.get_param(controller_name + '/controller')
-        package_path = controller['package']
-        module_name = controller['module']
-        class_name = controller['type']
-    except KeyError as ke:
-        rospy.logerr('[%s] configuration error: could not find controller parameters on parameter server' % controller_name)
-        sys.exit(1)
+        package_path = node.get_parameter(controller_name + '.controller.package')
+        module_name = node.get_parameter(controller_name + '.controller.module')
+        class_name = node.get_parameter(controller_name + '.controller.type')
+    except rclpy.exceptions.ParameterNotDeclaredException as e:
+        node.get_logger().error('[%s] configuration error: could not find controller parameters on parameter server' % controller_name)
+        raise
     except Exception as e:
-        rospy.logerr('[%s]: %s' % (controller_name, e))
-        sys.exit(1)
+        node.get_logger().error('[%s]: %s' % (controller_name, e))
+        raise
         
     if command.lower() == 'start':
         try:
-            response = start(port_namespace, package_path, module_name, class_name, controller_name, deps)
-            if response.success: rospy.loginfo(response.reason)
-            else: rospy.logerr(response.reason)
-        except rospy.ServiceException, e:
-            rospy.logerr('Service call failed: %s' % e)
+            req = StartController.Request()
+            req.port_name = port_namespace
+            req.package_path = package_path
+            req.module_name = module_name
+            req.class_name = class_name
+            req.controller_name = controller_name
+            req.dependencies = deps
+
+            for param in node.get_parameters_by_prefix(controller_name):
+                if not param.name.startswith(controller_name + '.controller.'):
+                    req.parameters.append(param.to_parameter_msg())
+            node.get_logger().info('[%s] passing %d parameters' % (controller_name, len(req.parameters)))
+            
+            response = start.call(req)
+            if response.success: node.get_logger().info(response.reason)
+            else: node.get_logger().error(response.reason)
+        except Exception as e:
+            node.get_logger().error('Service call failed: %s' % e)
     elif command.lower() == 'stop':
         try:
-            response = stop(controller_name)
-            if response.success: rospy.loginfo(response.reason)
-            else: rospy.logerr(response.reason)
-        except rospy.ServiceException, e:
-            rospy.logerr('Service call failed: %s' % e)
+            req = StopController.Request()
+            req.controller_name = controller_name
+            response = stop.call(req)
+            if response.success: node.get_logger().info(response.reason)
+            else: node.get_logger().error(response.reason)
+        except Exception as e:
+            node.get_logger().error('Service call failed: %s' % e)
     elif command.lower() == 'restart':
         try:
-            response = restart(port_namespace, package_path, module_name, class_name, controller_name, deps)
-            if response.success: rospy.loginfo(response.reason)
-            else: rospy.logerr(response.reason)
-        except rospy.ServiceException, e:
-            rospy.logerr('Service call failed: %s' % e)
+            req = RestartController.Request()
+            req.port_name = port_namespace
+            req.package_path = package_path
+            req.module_name = module_name
+            req.class_name = class_name
+            req.controller_name = controller_name
+            req.dependencies = deps
+            
+            for param in node.get_parameters_by_prefix(controller_name):
+                if not param.name.startswith(controller_name + '.controller.'):
+                    req.parameters.append(param.to_parameter_msg())
+            node.get_logger().info('[%s] passing %d parameters' % (controller_name, len(req.parameters)))
+
+            response = restart.call(req)
+            if response.success: node.get_logger().info(response.reason)
+            else: node.get_logger().error(response.reason)
+        except Exception as e:
+            node.get_logger().error('Service call failed: %s' % e)
     else:
-        rospy.logerr('Invalid command.')
+        node.get_logger().error('Invalid command.')
         parser.print_help()
 
-if __name__ == '__main__':
+def main(args=None):
+    rclpy.init(args=args)
+    
     try:
-        rospy.init_node('controller_spawner', anonymous=True)
+        node = rclpy.create_node('controller_spawner')
         
         parser.add_option('-m', '--manager', metavar='MANAGER',
                           help='specified serial port is managed by MANAGER')
@@ -106,7 +135,7 @@ if __name__ == '__main__':
         parser.add_option('-c', '--command', metavar='COMMAND', default='start', choices=('start','stop','restart'),
                           help='command to perform on specified controllers: start, stop or restart [default: %default]')
                           
-        (options, args) = parser.parse_args(rospy.myargv()[1:])
+        (options, args) = parser.parse_args(rclpy.utilities.remove_ros_args(args)[1:])
         
         if len(args) < 1:
             parser.error('specify at least one controller name')
@@ -122,26 +151,29 @@ if __name__ == '__main__':
         start_service_name = '%s/%s/start_controller' % (manager_namespace, port_namespace)
         stop_service_name = '%s/%s/stop_controller' % (manager_namespace, port_namespace)
         restart_service_name = '%s/%s/restart_controller' % (manager_namespace, port_namespace)
+
+        parent_namespace = 'global' if node.get_namespace() == '/' else node.get_namespace()
+        node.get_logger().info('%s controller_spawner: waiting for controller_manager %s to startup in %s namespace...' % (port_namespace, manager_namespace, parent_namespace))
         
-        parent_namespace = 'global' if rospy.get_namespace() == '/' else rospy.get_namespace()
-        rospy.loginfo('%s controller_spawner: waiting for controller_manager %s to startup in %s namespace...' % (port_namespace, manager_namespace, parent_namespace))
         
-        rospy.wait_for_service(start_service_name)
-        rospy.wait_for_service(stop_service_name)
-        rospy.wait_for_service(restart_service_name)
+        start_controller = node.create_client(StartController, start_service_name)
+        stop_controller = node.create_client(StopController, stop_service_name)
+        restart_controller = node.create_client(RestartController, restart_service_name)
+        start_controller.wait_for_service()
+        stop_controller.wait_for_service()
+        restart_controller.wait_for_service()
         
-        start_controller = rospy.ServiceProxy(start_service_name, StartController)
-        stop_controller = rospy.ServiceProxy(stop_service_name, StopController)
-        restart_controller = rospy.ServiceProxy(restart_service_name, RestartController)
-        
-        rospy.loginfo('%s controller_spawner: All services are up, spawning controllers...' % port_namespace)
+        node.get_logger().info('%s controller_spawner: All services are up, spawning controllers...' % port_namespace)
         
         if controller_type == 'simple':
             for controller_name in joint_controllers:
-                manage_controller(controller_name, port_namespace, controller_type, command, [], start_controller, stop_controller, restart_controller)
+                manage_controller(node, controller_name, port_namespace, controller_type, command, [], start_controller, stop_controller, restart_controller)
         elif controller_type == 'meta':
             controller_name = joint_controllers[0]
             dependencies = joint_controllers[1:]
-            manage_controller(controller_name, port_namespace, controller_type, command, dependencies, start_controller, stop_controller, restart_controller)
-    except rospy.ROSInterruptException: pass
+            manage_controller(node, controller_name, port_namespace, controller_type, command, dependencies, start_controller, stop_controller, restart_controller)
+    finally:
+        rclpy.shutdown()
 
+if __name__ == '__main__':
+    main()

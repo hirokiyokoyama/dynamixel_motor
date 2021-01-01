@@ -1,20 +1,17 @@
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 3.3)
 project(dynamixel_msgs)
 
-find_package(catkin REQUIRED
-  COMPONENTS message_generation std_msgs)
+find_package(rosidl_default_generators REQUIRED)
+find_package(builtin_interfaces REQUIRED)
+find_package(std_msgs REQUIRED)
 
-add_message_files(
-  FILES
-  JointState.msg
-  MotorState.msg
-  MotorStateList.msg
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "msg/JointState.msg"
+  "msg/MotorState.msg"
+  "msg/MotorStateList.msg"
+  DEPENDENCIES builtin_interfaces std_msgs
 )
 
-generate_messages(
-  DEPENDENCIES std_msgs
-)
+#ament_export_dependencies(rosidl_default_runtime)
+ament_package()
 
-catkin_package(
-  CATKIN_DEPENDS message_runtime std_msgs
-)

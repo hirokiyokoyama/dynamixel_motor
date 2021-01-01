@@ -16,14 +16,9 @@
 
   <author>Antons Rebguns</author>
 
-  <buildtool_depend>catkin</buildtool_depend>
+  <!--<exec_depend>dynamixel_tutorials</run_depend>-->
+  <exec_depend>dynamixel_msgs</exec_depend>
+  <exec_depend>dynamixel_controllers</exec_depend>
+  <exec_depend>dynamixel_driver</exec_depend>
 
-  <run_depend>dynamixel_tutorials</run_depend>
-  <run_depend>dynamixel_msgs</run_depend>
-  <run_depend>dynamixel_controllers</run_depend>
-  <run_depend>dynamixel_driver</run_depend>
-
-  <export>
-    <metapackage/>
-  </export>
 </package>
