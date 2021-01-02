@@ -20,7 +20,7 @@ import launch_ros.actions
 
 manager = launch_ros.actions.Node(
     package = 'dynamixel_controllers',
-    node_executable = 'controller_manager',
+    node_executable = 'controller_manager.py',
     output = 'screen',
     node_name = 'dynamixel_manager',
     parameters = [{
