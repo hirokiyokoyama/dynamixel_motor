@@ -54,7 +54,6 @@ from collections import defaultdict
 
 import rclpy
 from rclpy.node import Node
-from rcl_interfaces.srv import GetParameters
 
 from . import dynamixel_io
 from .dynamixel_const import *
@@ -77,8 +76,9 @@ class SerialProxy(Node):
                  diagnostics_rate=1,
                  error_level_temp=75,
                  warn_level_temp=70,
-                 readback_echo=False):
-        super().__init__('dynamixel_serial_proxy')
+                 readback_echo=False,
+                 node_namespace=None):
+        super().__init__(port_namespace, namespace=node_namespace)
 
         self.port_name = port_name
         self.port_namespace = port_namespace
@@ -99,8 +99,6 @@ class SerialProxy(Node):
         self.motor_states_pub = self.create_publisher(MotorStateList, 'motor_states/%s' % self.port_namespace, 1)
         self.diagnostics_pub = self.create_publisher(DiagnosticArray, '/diagnostics', 1)
 
-        self.create_service(GetParameters, 'get_dynamixel_parameters', self.process_get_dynamixel_parameters)
-
     def connect(self):
         try:
             self.dxl_io = dynamixel_io.DynamixelIO(self.port_name, self.baud_rate, self.readback_echo)
@@ -116,12 +114,6 @@ class SerialProxy(Node):
     def disconnect(self):
         self.running = False
 
-    def process_get_dynamixel_parameters(self, req):
-        res = GetParameters.Response()
-        for param in self.get_parameters(req.names):
-            res.values.append(param.to_parameter_msg())
-        return res
-
     def __fill_motor_parameters(self, motor_id, model_number):
         """
         Stores some extra information about each motor on the parameter server.
@@ -130,38 +122,40 @@ class SerialProxy(Node):
         angles = self.dxl_io.get_angle_limits(motor_id)
         voltage = self.dxl_io.get_voltage(motor_id)
         voltages = self.dxl_io.get_voltage_limits(motor_id)
+        firmware = self.dxl_io.get_firmware_version(motor_id)
+        delay = self.dxl_io.get_return_delay_time(motor_id)
 
-        self.declare_parameter('%s.%d.model_number' %(self.port_namespace, motor_id), model_number)
-        self.declare_parameter('%s.%d.model_name' %(self.port_namespace, motor_id), DXL_MODEL_TO_PARAMS[model_number]['name'])
-        self.declare_parameter('%s.%d.min_angle' %(self.port_namespace, motor_id), angles['min'])
-        self.declare_parameter('%s.%d.max_angle' %(self.port_namespace, motor_id), angles['max'])
+        self.declare_parameter('%d.model_number' % motor_id, model_number)
+        self.declare_parameter('%d.model_name' % motor_id, DXL_MODEL_TO_PARAMS[model_number]['name'])
+        self.declare_parameter('%d.min_angle' % motor_id, angles['min'])
+        self.declare_parameter('%d.max_angle' % motor_id, angles['max'])
         
         torque_per_volt = DXL_MODEL_TO_PARAMS[model_number]['torque_per_volt']
-        self.declare_parameter('%s.%d.torque_per_volt' %(self.port_namespace, motor_id), torque_per_volt)
-        self.declare_parameter('%s.%d.max_torque' %(self.port_namespace, motor_id), torque_per_volt * voltage)
+        self.declare_parameter('%d.torque_per_volt' % motor_id, torque_per_volt)
+        self.declare_parameter('%d.max_torque' % motor_id, torque_per_volt * voltage)
         
         velocity_per_volt = DXL_MODEL_TO_PARAMS[model_number]['velocity_per_volt']
         rpm_per_tick = DXL_MODEL_TO_PARAMS[model_number]['rpm_per_tick']
-        self.declare_parameter('%s.%d.velocity_per_volt' %(self.port_namespace, motor_id), velocity_per_volt)
-        self.declare_parameter('%s.%d.max_velocity' %(self.port_namespace, motor_id), velocity_per_volt * voltage)
-        self.declare_parameter('%s.%d.radians_second_per_encoder_tick' %(self.port_namespace, motor_id), rpm_per_tick * RPM_TO_RADSEC)
+        self.declare_parameter('%d.velocity_per_volt' % motor_id, velocity_per_volt)
+        self.declare_parameter('%d.max_velocity' % motor_id, velocity_per_volt * voltage)
+        self.declare_parameter('%d.radians_second_per_encoder_tick' % motor_id, rpm_per_tick * RPM_TO_RADSEC)
         
         encoder_resolution = DXL_MODEL_TO_PARAMS[model_number]['encoder_resolution']
         range_degrees = DXL_MODEL_TO_PARAMS[model_number]['range_degrees']
         range_radians = math.radians(range_degrees)
-        self.declare_parameter('%s.%d.encoder_resolution' %(self.port_namespace, motor_id), encoder_resolution)
-        self.declare_parameter('%s.%d.range_degrees' %(self.port_namespace, motor_id), range_degrees)
-        self.declare_parameter('%s.%d.range_radians' %(self.port_namespace, motor_id), range_radians)
-        self.declare_parameter('%s.%d.encoder_ticks_per_degree' %(self.port_namespace, motor_id), encoder_resolution / range_degrees)
-        self.declare_parameter('%s.%d.encoder_ticks_per_radian' %(self.port_namespace, motor_id), encoder_resolution / range_radians)
-        self.declare_parameter('%s.%d.degrees_per_encoder_tick' %(self.port_namespace, motor_id), range_degrees / encoder_resolution)
-        self.declare_parameter('%s.%d.radians_per_encoder_tick' %(self.port_namespace, motor_id), range_radians / encoder_resolution)
+        self.declare_parameter('%d.encoder_resolution' % motor_id, encoder_resolution)
+        self.declare_parameter('%d.range_degrees' % motor_id, range_degrees)
+        self.declare_parameter('%d.range_radians' % motor_id, range_radians)
+        self.declare_parameter('%d.encoder_ticks_per_degree' % motor_id, encoder_resolution / range_degrees)
+        self.declare_parameter('%d.encoder_ticks_per_radian' % motor_id, encoder_resolution / range_radians)
+        self.declare_parameter('%d.degrees_per_encoder_tick' % motor_id, range_degrees / encoder_resolution)
+        self.declare_parameter('%d.radians_per_encoder_tick' % motor_id, range_radians / encoder_resolution)
         
         # keep some parameters around for diagnostics
         self.motor_static_info[motor_id] = {}
         self.motor_static_info[motor_id]['model'] = DXL_MODEL_TO_PARAMS[model_number]['name']
-        self.motor_static_info[motor_id]['firmware'] = self.dxl_io.get_firmware_version(motor_id)
-        self.motor_static_info[motor_id]['delay'] = self.dxl_io.get_return_delay_time(motor_id)
+        self.motor_static_info[motor_id]['firmware'] = firmware
+        self.motor_static_info[motor_id]['delay'] = delay
         self.motor_static_info[motor_id]['min_angle'] = angles['min']
         self.motor_static_info[motor_id]['max_angle'] = angles['max']
         self.motor_static_info[motor_id]['min_voltage'] = voltages['min']
@@ -186,7 +180,7 @@ class SerialProxy(Node):
                     
         if not self.motors:
             self.get_logger().fatal('%s: No motors found.' % self.port_namespace)
-            sys.exit(1)
+            raise Exception('No motors found.')
             
         counts = defaultdict(int)
         
@@ -207,7 +201,7 @@ class SerialProxy(Node):
         for motor_id in to_delete_if_error:
             self.motors.remove(motor_id)
             
-        self.declare_parameter('dynamixel/%s/connected_ids' % self.port_namespace, self.motors)
+        self.declare_parameter('connected_ids', self.motors)
         
         status_str = '%s: Found %d motors - ' % (self.port_namespace, len(self.motors))
         for model_number,count in counts.items():
@@ -264,7 +258,7 @@ class SerialProxy(Node):
                 
                 # calculate actual update rate
                 current_time = self.get_clock().now()
-                rates.append(1.0 / (current_time - last_time).to_sec())
+                rates.append(1000000000.0 / (current_time - last_time).nanoseconds)
                 self.actual_rate = round(sum(rates)/num_events, 2)
                 last_time = current_time
                 
@@ -276,20 +270,20 @@ class SerialProxy(Node):
         rate = self.create_rate(self.diagnostics_rate)
         while rclpy.ok() and self.running:
             diag_msg.status = []
-            diag_msg.header.stamp = self.get_clock().now()
+            diag_msg.header.stamp = self.get_clock().now().to_msg()
             
             status = DiagnosticStatus()
             
             status.name = 'Dynamixel Serial Bus (%s)' % self.port_namespace
             status.hardware_id = 'Dynamixel Serial Bus on port %s' % self.port_name
-            status.values.append(KeyValue('Baud Rate', str(self.baud_rate)))
-            status.values.append(KeyValue('Min Motor ID', str(self.min_motor_id)))
-            status.values.append(KeyValue('Max Motor ID', str(self.max_motor_id)))
-            status.values.append(KeyValue('Desired Update Rate', str(self.update_rate)))
-            status.values.append(KeyValue('Actual Update Rate', str(self.actual_rate)))
-            status.values.append(KeyValue('# Non Fatal Errors', str(self.error_counts['non_fatal'])))
-            status.values.append(KeyValue('# Checksum Errors', str(self.error_counts['checksum'])))
-            status.values.append(KeyValue('# Dropped Packet Errors', str(self.error_counts['dropped'])))
+            status.values.append(KeyValue(key='Baud Rate', value=str(self.baud_rate)))
+            status.values.append(KeyValue(key='Min Motor ID', value=str(self.min_motor_id)))
+            status.values.append(KeyValue(key='Max Motor ID', value=str(self.max_motor_id)))
+            status.values.append(KeyValue(key='Desired Update Rate', value=str(self.update_rate)))
+            status.values.append(KeyValue(key='Actual Update Rate', value=str(self.actual_rate)))
+            status.values.append(KeyValue(key='# Non Fatal Errors', value=str(self.error_counts['non_fatal'])))
+            status.values.append(KeyValue(key='# Checksum Errors', value=str(self.error_counts['checksum'])))
+            status.values.append(KeyValue(key='# Dropped Packet Errors', value=str(self.error_counts['dropped'])))
             status.level = DiagnosticStatus.OK
             status.message = 'OK'
             
@@ -306,22 +300,22 @@ class SerialProxy(Node):
                 
                 status.name = 'Robotis Dynamixel Motor %d on port %s' % (mid, self.port_namespace)
                 status.hardware_id = 'DXL-%d@%s' % (motor_state.id, self.port_namespace)
-                status.values.append(KeyValue('Model Name', str(self.motor_static_info[mid]['model'])))
-                status.values.append(KeyValue('Firmware Version', str(self.motor_static_info[mid]['firmware'])))
-                status.values.append(KeyValue('Return Delay Time', str(self.motor_static_info[mid]['delay'])))
-                status.values.append(KeyValue('Minimum Voltage', str(self.motor_static_info[mid]['min_voltage'])))
-                status.values.append(KeyValue('Maximum Voltage', str(self.motor_static_info[mid]['max_voltage'])))
-                status.values.append(KeyValue('Minimum Position (CW)', str(self.motor_static_info[mid]['min_angle'])))
-                status.values.append(KeyValue('Maximum Position (CCW)', str(self.motor_static_info[mid]['max_angle'])))
+                status.values.append(KeyValue(key='Model Name', value=str(self.motor_static_info[mid]['model'])))
+                status.values.append(KeyValue(key='Firmware Version', value=str(self.motor_static_info[mid]['firmware'])))
+                status.values.append(KeyValue(key='Return Delay Time', value=str(self.motor_static_info[mid]['delay'])))
+                status.values.append(KeyValue(key='Minimum Voltage', value=str(self.motor_static_info[mid]['min_voltage'])))
+                status.values.append(KeyValue(key='Maximum Voltage', value=str(self.motor_static_info[mid]['max_voltage'])))
+                status.values.append(KeyValue(key='Minimum Position (CW)', value=str(self.motor_static_info[mid]['min_angle'])))
+                status.values.append(KeyValue(key='Maximum Position (CCW)', value=str(self.motor_static_info[mid]['max_angle'])))
                 
-                status.values.append(KeyValue('Goal', str(motor_state.goal)))
-                status.values.append(KeyValue('Position', str(motor_state.position)))
-                status.values.append(KeyValue('Error', str(motor_state.error)))
-                status.values.append(KeyValue('Velocity', str(motor_state.speed)))
-                status.values.append(KeyValue('Load', str(motor_state.load)))
-                status.values.append(KeyValue('Voltage', str(motor_state.voltage)))
-                status.values.append(KeyValue('Temperature', str(motor_state.temperature)))
-                status.values.append(KeyValue('Moving', str(motor_state.moving)))
+                status.values.append(KeyValue(key='Goal', value=str(motor_state.goal)))
+                status.values.append(KeyValue(key='Position', value=str(motor_state.position)))
+                status.values.append(KeyValue(key='Error', value=str(motor_state.error)))
+                status.values.append(KeyValue(key='Velocity', value=str(motor_state.speed)))
+                status.values.append(KeyValue(key='Load', value=str(motor_state.load)))
+                status.values.append(KeyValue(key='Voltage', value=str(motor_state.voltage)))
+                status.values.append(KeyValue(key='Temperature', value=str(motor_state.temperature)))
+                status.values.append(KeyValue(key='Moving', value=str(motor_state.moving)))
                 
                 if motor_state.temperature >= self.error_level_temp:
                     status.level = DiagnosticStatus.ERROR

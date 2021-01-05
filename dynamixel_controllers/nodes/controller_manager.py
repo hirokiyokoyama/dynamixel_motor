@@ -71,11 +71,9 @@ class ControllerManager(Node):
         self.controllers = {}
         self.serial_proxies = {}
         self.diagnostics_rate = self.get_parameter_or(
-            'diagnostics_rate',
+            'diagnostics_rate', 1
         )
-        if self.diagnostics_rate is None:
-            self.diagnostics_rate = 1
-        else:
+        if not isinstance(self.diagnostics_rate, int):
             self.diagnostics_rate = self.diagnostics_rate.value
         
         self.start_controller_lock = Lock()
@@ -116,7 +114,8 @@ class ControllerManager(Node):
                                        self.diagnostics_rate,
                                        error_level_temp,
                                        warn_level_temp,
-                                       readback_echo)
+                                       readback_echo,
+                                       node_namespace = self.get_namespace())
             serial_proxy.connect()
             
             # will create a set of services for each serial port under common manager namesapce
@@ -154,7 +153,7 @@ class ControllerManager(Node):
         rate = self.create_rate(self.diagnostics_rate)
         while rclpy.ok():
             diag_msg.status = []
-            diag_msg.header.stamp = self.get_clock().now()
+            diag_msg.header.stamp = self.get_clock().now().to_msg()
             
             for controller in self.controllers.values():
                 try:
@@ -196,10 +195,11 @@ class ControllerManager(Node):
                 if controller.initialize():
                     controller.start()
                     self.controllers[controller_name] = controller
+                    rclpy.get_global_executor().add_node(controller)
                     
         self.waiting_meta_controllers = controllers_still_waiting[:]
 
-    def start_controller(self, req):
+    def start_controller(self, req, res):
         port_name = req.port_name
         package_path = req.package_path
         module_name = req.module_name
@@ -211,33 +211,33 @@ class ControllerManager(Node):
         
         if controller_name in self.controllers:
             self.start_controller_lock.release()
-            return StartController.Response(
-                success = False,
-                reason = 'Controller [%s] already started. If you want to restart it, call restart.' % controller_name)
+            res.success = False
+            res.reason = 'Controller [%s] already started. If you want to restart it, call restart.' % controller_name
+            return res
             
         try:
             if module_name not in sys.modules:
                 # import if module not previously imported
-                package_module = __import__(package_path, globals(), locals(), [module_name], -1)
+                package_module = __import__(package_path, globals(), locals(), [module_name])
             else:
                 # reload module if previously imported
                 package_module = reload(sys.modules[package_path])
             controller_module = getattr(package_module, module_name)
         except ImportError as ie:
             self.start_controller_lock.release()
-            return StartController.Response(
-                success = False,
-                reason = 'Cannot find controller module. Unable to start controller %s\n%s' % (module_name, str(ie)))
+            res.success = False
+            res.reason = 'Cannot find controller module. Unable to start controller %s\n%s' % (module_name, str(ie))
+            return res
         except SyntaxError as se:
             self.start_controller_lock.release()
-            return StartController.Response(
-                success = False,
-                reason = 'Syntax error in controller module. Unable to start controller %s\n%s' % (module_name, str(se)))
+            res.success = False
+            res.reason = 'Syntax error in controller module. Unable to start controller %s\n%s' % (module_name, str(se))
+            return res
         except Exception as e:
             self.start_controller_lock.release()
-            return StartController.Response(
-                success = False,
-                reason = 'Unknown error has occured. Unable to start controller %s\n%s' % (module_name, str(e)))
+            res.success = False
+            res.reason = 'Unknown error has occured. Unable to start controller %s\n%s' % (module_name, str(e))
+            return res
         
         kls = getattr(controller_module, class_name)
         
@@ -245,15 +245,15 @@ class ControllerManager(Node):
             self.waiting_meta_controllers.append((controller_name,req.dependencies,kls))
             self.check_deps()
             self.start_controller_lock.release()
-            return StartController.Response(
-                success = True,
-                reason = '')
+            res.success = True
+            res.reason = ''
+            return res
             
         if port_name != 'meta' and (port_name not in self.serial_proxies):
             self.start_controller_lock.release()
-            return StartController.Response(
-                success = False,
-                reason = 'Specified port [%s] not found, available ports are %s. Unable to start controller %s' % (port_name, str(self.serial_proxies.keys()), controller_name))
+            res.success = False
+            res.reason = 'Specified port [%s] not found, available ports are %s. Unable to start controller %s' % (port_name, str(self.serial_proxies.keys()), controller_name)
+            return res
             
         controller = kls(self.serial_proxies[port_name].dxl_io, controller_name, port_name,
                          node_namespace = self.get_namespace(),
@@ -262,50 +262,59 @@ class ControllerManager(Node):
         if controller.initialize():
             controller.start()
             self.controllers[controller_name] = controller
+            rclpy.get_global_executor().add_node(controller)
             
             self.check_deps()
             self.start_controller_lock.release()
             
-            return StartController.Response(
-                success = True,
-                reason = 'Controller %s successfully started.' % controller_name)
+            res.success = True
+            res.reason = 'Controller %s successfully started.' % controller_name
+            return res
         else:
             self.start_controller_lock.release()
-            return StartController.Response(
-                success = False,
-                reason = 'Initialization failed. Unable to start controller %s' % controller_name)
+            res.success = False
+            res.reason = 'Initialization failed. Unable to start controller %s' % controller_name
+            return res
 
-    def stop_controller(self, req):
+    def stop_controller(self, req, res):
         controller_name = req.controller_name
         self.stop_controller_lock.acquire()
         
         if controller_name in self.controllers:
             self.controllers[controller_name].stop()
+            rclpy.get_global_executor().remove_node(controllers[controller_name])
             del self.controllers[controller_name]
             self.stop_controller_lock.release()
-            return StopController.Response(
-                success = True,
-                reason = 'controller %s successfully stopped.' % controller_name)
+            res.success = True
+            res.reason = 'controller %s successfully stopped.' % controller_name
+            return res
         else:
             self.self.stop_controller_lock.release()
-            return StopController.Response(
-                success = False,
-                reason = 'controller %s was not running.' % controller_name)
+            res.success = False
+            res.reason = 'controller %s was not running.' % controller_name
+            return res
 
-    def restart_controller(self, req):
+    def restart_controller(self, req, res):
         response1 = self.stop_controller(StopController(req.controller_name))
         response2 = self.start_controller(req)
-        return RestartController.Response(
-            success = response1.success and response2.success,
-            reason = '%s\n%s' % (response1.reason, response2.reason))
+        res.success = response1.success and response2.success
+        res.reason = '%s\n%s' % (response1.reason, response2.reason)
+        return res
 
 def main(args=None):
     rclpy.init(args=args)
+    manager = None
     try:
         manager = ControllerManager()
-        rclpy.spin(manager)
+        #rclpy.spin(manager)
+        executor = rclpy.get_global_executor()
+        executor.add_node(manager)
+        for node in manager.serial_proxies.values():
+            executor.add_node(node)
+        executor.spin()
     finally:
-        manager.on_shutdown()
+        if manager is not None:
+            manager.on_shutdown()
         rclpy.shutdown()
 
 if __name__ == '__main__':

@@ -55,11 +55,11 @@ from dynamixel_controllers.srv import RestartController
 
 parser = OptionParser()
 
-def manage_controller(node, controller_name, port_namespace, controller_type, command, deps, start, stop, restart, set_parameters):
+def manage_controller(node, controller_name, port_namespace, controller_type, command, deps, start, stop, restart):
     try:
-        package_path = node.get_parameter(controller_name + '.controller.package')
-        module_name = node.get_parameter(controller_name + '.controller.module')
-        class_name = node.get_parameter(controller_name + '.controller.type')
+        package_path = node.get_parameter(controller_name + '.controller.package').value
+        module_name = node.get_parameter(controller_name + '.controller.module').value
+        class_name = node.get_parameter(controller_name + '.controller.type').value
     except rclpy.exceptions.ParameterNotDeclaredException as e:
         node.get_logger().error('[%s] configuration error: could not find controller parameters on parameter server' % controller_name)
         raise
@@ -77,12 +77,15 @@ def manage_controller(node, controller_name, port_namespace, controller_type, co
             req.controller_name = controller_name
             req.dependencies = deps
 
-            for param in node.get_parameters_by_prefix(controller_name):
-                if not param.name.startswith(controller_name + '.controller.'):
+            for name, param in node.get_parameters_by_prefix(controller_name).items():
+                if not name.startswith('controller.'):
+                    param = rclpy.parameter.Parameter(name, param.type_, param.value)
                     req.parameters.append(param.to_parameter_msg())
             node.get_logger().info('[%s] passing %d parameters' % (controller_name, len(req.parameters)))
             
-            response = start.call(req)
+            future = start.call_async(req)
+            rclpy.spin_until_future_complete(node, future)
+            response = future.result()
             if response.success: node.get_logger().info(response.reason)
             else: node.get_logger().error(response.reason)
         except Exception as e:
@@ -91,7 +94,9 @@ def manage_controller(node, controller_name, port_namespace, controller_type, co
         try:
             req = StopController.Request()
             req.controller_name = controller_name
-            response = stop.call(req)
+            future = stop.call_async(req)
+            rclpy.spin_until_future_complete(node, future)
+            response = future.result()
             if response.success: node.get_logger().info(response.reason)
             else: node.get_logger().error(response.reason)
         except Exception as e:
@@ -106,12 +111,15 @@ def manage_controller(node, controller_name, port_namespace, controller_type, co
             req.controller_name = controller_name
             req.dependencies = deps
             
-            for param in node.get_parameters_by_prefix(controller_name):
-                if not param.name.startswith(controller_name + '.controller.'):
+            for name, param in node.get_parameters_by_prefix(controller_name).items():
+                if not name.startswith('controller'):
+                    param = rclpy.parameter.Parameter(name, param.type_, param.value)
                     req.parameters.append(param.to_parameter_msg())
             node.get_logger().info('[%s] passing %d parameters' % (controller_name, len(req.parameters)))
 
-            response = restart.call(req)
+            future = restart.call_async(req)
+            rclpy.spin_until_future_complete(node, future)
+            response = future.result()
             if response.success: node.get_logger().info(response.reason)
             else: node.get_logger().error(response.reason)
         except Exception as e:
@@ -124,7 +132,7 @@ def main(args=None):
     rclpy.init(args=args)
     
     try:
-        node = rclpy.create_node('controller_spawner')
+        node = rclpy.create_node('controller_spawner', automatically_declare_parameters_from_overrides=True)
         
         parser.add_option('-m', '--manager', metavar='MANAGER',
                           help='specified serial port is managed by MANAGER')

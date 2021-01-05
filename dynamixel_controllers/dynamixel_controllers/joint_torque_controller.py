@@ -69,7 +69,7 @@ class JointTorqueController(JointController):
 
     def initialize(self):
         # verify that the expected motor is connected and responding
-        available_ids = self.get_dynamixel_parameter('%s.connected_ids' % self.port_namespace, [])
+        available_ids = self.get_dynamixel_parameter('connected_ids', [])
         
         if not self.motor_id in available_ids:
             self.get_logger().warning('The specified motor id is not connected and responding.')
@@ -77,8 +77,8 @@ class JointTorqueController(JointController):
             self.get_logger.warning('Specified id: %d' % self.motor_id)
             return False
             
-        self.RADIANS_PER_ENCODER_TICK = self.get_dynamixel_parameter('%s.%d.radians_per_encoder_tick' % (self.port_namespace, self.motor_id))
-        self.ENCODER_TICKS_PER_RADIAN = self.get_dynamixel_parameter('%s.%d.encoder_ticks_per_radian' % (self.port_namespace, self.motor_id))
+        self.RADIANS_PER_ENCODER_TICK = self.get_dynamixel_parameter('%d.radians_per_encoder_tick' % self.motor_id)
+        self.ENCODER_TICKS_PER_RADIAN = self.get_dynamixel_parameter('%d.encoder_ticks_per_radian' % self.motor_id)
         
         if self.flipped:
             self.min_angle = (self.initial_position_raw - self.min_angle_raw) * self.RADIANS_PER_ENCODER_TICK
@@ -87,10 +87,10 @@ class JointTorqueController(JointController):
             self.min_angle = (self.min_angle_raw - self.initial_position_raw) * self.RADIANS_PER_ENCODER_TICK
             self.max_angle = (self.max_angle_raw - self.initial_position_raw) * self.RADIANS_PER_ENCODER_TICK
             
-        self.ENCODER_RESOLUTION = self.get_dynamixel_parameter('%s.%d.encoder_resolution' % (self.port_namespace, self.motor_id))
+        self.ENCODER_RESOLUTION = self.get_dynamixel_parameter('%d.encoder_resolution' % self.motor_id)
         self.MAX_POSITION = self.ENCODER_RESOLUTION - 1
-        self.VELOCITY_PER_TICK = self.get_dynamixel_parameter('%s.%d.radians_second_per_encoder_tick' % (self.port_namespace, self.motor_id))
-        self.MAX_VELOCITY = self.get_dynamixel_parameter('%s.%d.max_velocity' % (self.port_namespace, self.motor_id))
+        self.VELOCITY_PER_TICK = self.get_dynamixel_parameter('%d.radians_second_per_encoder_tick' % self.motor_id)
+        self.MAX_VELOCITY = self.get_dynamixel_parameter('%d.max_velocity' % self.motor_id)
         self.MIN_VELOCITY = self.VELOCITY_PER_TICK
         
         if self.compliance_slope is not None: self.set_compliance_slope(self.compliance_slope)
@@ -153,7 +153,7 @@ class JointTorqueController(JointController):
 
     def process_motor_states(self, state_list):
         if self.running:
-            state = filter(lambda state: state.id == self.motor_id, state_list.motor_states)
+            state = list(filter(lambda state: state.id == self.motor_id, state_list.motor_states))
             if state:
                 state = state[0]
                 self.joint_state.motor_temps = [state.temperature]
@@ -163,7 +163,7 @@ class JointTorqueController(JointController):
                 self.joint_state.velocity = state.speed * self.VELOCITY_PER_TICK
                 self.joint_state.load = state.load
                 self.joint_state.is_moving = state.moving
-                self.joint_state.header.stamp = rclpy.time.Time(seconds=state.timestamp)
+                self.joint_state.header.stamp = rclpy.time.Time(seconds=state.timestamp).to_msg()
                 
                 self.joint_state_pub.publish(self.joint_state)
 

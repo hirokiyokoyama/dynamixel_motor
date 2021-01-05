@@ -67,7 +67,7 @@ class JointController(Node):
                  parameters = None):
         super().__init__(
             controller_namespace,
-            node_namespace = node_namespace,
+            namespace = node_namespace,
             parameter_overrides = parameters)
         
         self.running = False
@@ -85,12 +85,14 @@ class JointController(Node):
         
         self.speed_service = self.create_service(SetSpeed, self.controller_namespace + '/set_speed',  self.process_set_speed)
         self.torque_service = self.create_service(TorqueEnable, self.controller_namespace + '/torque_enable', self.process_torque_enable)
-        self.compliance_slope_service = self.create_service(SetCompianceSlope, self.controller_namespace + '/set_compliance_slope', self.process_set_compliance_slope)
+        self.compliance_slope_service = self.create_service(SetComplianceSlope, self.controller_namespace + '/set_compliance_slope', self.process_set_compliance_slope)
         self.compliance_marigin_service = self.create_service(SetComplianceMargin, self.controller_namespace + '/set_compliance_margin', self.process_set_compliance_margin)
         self.compliance_punch_service = self.create_service(SetCompliancePunch, self.controller_namespace + '/set_compliance_punch', self.process_set_compliance_punch)
         self.torque_limit_service = self.create_service(SetTorqueLimit, self.controller_namespace + '/set_torque_limit', self.process_set_torque_limit)
 
-        self.dynamixel_parameter_client = self.create_client(GetParameters, 'get_dynamixel_parameters')
+        self.dynamixel_parameter_client = self.create_client(GetParameters, '/{}/get_parameters'.format(port_namespace))
+        self.dynamixel_parameter_client.wait_for_service()
+        rclpy.get_global_executor().add_node(self)
 
     def __ensure_limits(self):
         if self.compliance_slope is not None:
@@ -118,17 +120,17 @@ class JointController(Node):
     def start(self):
         self.running = True
         self.joint_state_pub = self.create_publisher(JointState, self.controller_namespace + '/state', 1)
-        self.command_sub = self.create_subscription(Float64, self.controller_namespace + '/command', self.process_command)
-        self.motor_states_sub = self.create_subscription(MotorStateList, 'motor_states/%s' % self.port_namespace, self.process_motor_states)
+        self.command_sub = self.create_subscription(Float64, self.controller_namespace + '/command', self.process_command, 1)
+        self.motor_states_sub = self.create_subscription(MotorStateList, 'motor_states/%s' % self.port_namespace, self.process_motor_states, 1)
 
     def stop(self):
         self.running = False
-        self.joint_state_pub.unregister()
-        self.motor_states_sub.unregister()
-        self.command_sub.unregister()
-        self.speed_service.shutdown('normal shutdown')
-        self.torque_service.shutdown('normal shutdown')
-        self.compliance_slope_service.shutdown('normal shutdown')
+        self.joint_state_pub.destroy()
+        self.motor_states_sub.destroy()
+        self.command_sub.destroy()
+        self.speed_service.destroy()
+        self.torque_service.destroy()
+        self.compliance_slope_service.destroy()
 
     def set_torque_enable(self, torque_enable):
         raise NotImplementedError
@@ -148,29 +150,29 @@ class JointController(Node):
     def set_torque_limit(self, max_torque):
         raise NotImplementedError
 
-    def process_set_speed(self, req):
+    def process_set_speed(self, req, res):
         self.set_speed(req.speed)
-        return [] # success
+        return res # success
 
-    def process_torque_enable(self, req):
+    def process_torque_enable(self, req, res):
         self.set_torque_enable(req.torque_enable)
-        return []
+        return res
 
-    def process_set_compliance_slope(self, req):
+    def process_set_compliance_slope(self, req, res):
         self.set_compliance_slope(req.slope)
-        return []
+        return res
 
-    def process_set_compliance_margin(self, req):
+    def process_set_compliance_margin(self, req, res):
         self.set_compliance_margin(req.margin)
-        return []
+        return res
 
-    def process_set_compliance_punch(self, req):
+    def process_set_compliance_punch(self, req, res):
         self.set_compliance_punch(req.punch)
-        return []
+        return res
 
-    def process_set_torque_limit(self, req):
+    def process_set_torque_limit(self, req, res):
         self.set_torque_limit(req.torque_limit)
-        return []
+        return res
 
     def process_motor_states(self, state_list):
         raise NotImplementedError
@@ -192,8 +194,8 @@ class JointController(Node):
         try:
             req = GetParameters.Request()
             req.names.append(name)
-            future = self.dynamixel_parameter_client.call(req)
-            rclpy.spin_until_future_complete(self, future)
+            future = self.dynamixel_parameter_client.call_async(req)
+            rclpy.get_global_executor().spin_until_future_complete(future)
             res = future.result()
             if res is not None:
                 value = None
