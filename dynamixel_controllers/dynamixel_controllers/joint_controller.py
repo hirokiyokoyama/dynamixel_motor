@@ -92,7 +92,7 @@ class JointController(Node):
 
         self.dynamixel_parameter_client = self.create_client(GetParameters, '/{}/get_parameters'.format(port_namespace))
         self.dynamixel_parameter_client.wait_for_service()
-        rclpy.get_global_executor().add_node(self)
+        #rclpy.get_global_executor().add_node(self)
 
     def __ensure_limits(self):
         if self.compliance_slope is not None:
@@ -195,7 +195,8 @@ class JointController(Node):
             req = GetParameters.Request()
             req.names.append(name)
             future = self.dynamixel_parameter_client.call_async(req)
-            rclpy.get_global_executor().spin_until_future_complete(future)
+            #rclpy.get_global_executor().spin_until_future_complete(future)
+            rclpy.spin_until_future_complete(self, future)
             res = future.result()
             if res is not None:
                 value = None
