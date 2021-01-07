@@ -38,8 +38,8 @@ rosidl_generate_interfaces(${PROJECT_NAME}
 ament_python_install_package(${PROJECT_NAME})
 
 install(PROGRAMS
-  nodes/controller_manager.py
-  nodes/controller_spawner.py
+  dynamixel_controllers/nodes/controller_manager.py
+  dynamixel_controllers/nodes/controller_spawner.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

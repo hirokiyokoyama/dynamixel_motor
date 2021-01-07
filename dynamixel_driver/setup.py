@@ -1,13 +1,14 @@
 #!/usr/bin/env python
 
 from setuptools import setup
+from setuptools import find_packages
 
 package_name = 'dynamixel_driver'
 
 setup(
     name=package_name,
     version='0.0.0',
-    packages=[],
+    packages=find_packages(),
     py_modules=[
         'dynamixel_driver.dynamixel_io',
         'dynamixel_driver.dynamixel_const',
@@ -32,10 +33,10 @@ setup(
     entry_points={
         'console_scripts': [
             'dynamixel_serial_proxy= dynamixel_driver.dynamixel_serial_proxy:main',
-            'info_dump= scripts.info_dump:main',
-            'change_id= scripts.change_id:main',
-            'set_servo_config= scripts.set_servo_config:main',
-            'set_torque= scripts.set_torque:main',
+            'info_dump= dynamixel_driver_scripts.info_dump:main',
+            'change_id= dynamixel_driver_scripts.change_id:main',
+            'set_servo_config= dynamixel_driver_scripts.set_servo_config:main',
+            'set_torque= dynamixel_driver_scripts.set_torque:main',
         ],
     },
 )

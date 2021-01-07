@@ -194,6 +194,7 @@ class JointController(Node):
         try:
             req = GetParameters.Request()
             req.names.append(name)
+            self.get_logger().info('Getting dynamixel parameter %s' % name)
             future = self.dynamixel_parameter_client.call_async(req)
             #rclpy.get_global_executor().spin_until_future_complete(future)
             rclpy.spin_until_future_complete(self, future)
