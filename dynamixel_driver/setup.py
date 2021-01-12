@@ -33,10 +33,10 @@ setup(
     entry_points={
         'console_scripts': [
             'dynamixel_serial_proxy= dynamixel_driver.dynamixel_serial_proxy:main',
-            'info_dump= dynamixel_driver_scripts.info_dump:main',
-            'change_id= dynamixel_driver_scripts.change_id:main',
-            'set_servo_config= dynamixel_driver_scripts.set_servo_config:main',
-            'set_torque= dynamixel_driver_scripts.set_torque:main',
+            'info_dump= dynamixel_driver.scripts.info_dump:main',
+            'change_id= dynamixel_driver.scripts.change_id:main',
+            'set_servo_config= dynamixel_driver.scripts.set_servo_config:main',
+            'set_torque= dynamixel_driver.scripts.set_torque:main',
         ],
     },
 )
